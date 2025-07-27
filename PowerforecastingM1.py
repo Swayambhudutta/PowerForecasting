@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -127,7 +126,7 @@ if uploaded_file is not None:
         mw_savings = np.sum(baseline - forecast)
         financial_gain = mw_savings * rate
         yearly_gain = financial_gain * 365
-        return forecast, test, financial_gain, yearly_gain
+        return forecast, test, financial_gain, yearly_gain, model_name
 
     scaler = MinMaxScaler()
     scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
@@ -135,7 +134,7 @@ if uploaded_file is not None:
     X_train, y_train = create_features(scaled_series[:70], window)
     X_test, y_test = create_features(scaled_series[70-window:100], window)
 
-    forecast, test, financial_gain, yearly_gain = train_model(
+    forecast, test, financial_gain, yearly_gain, model_used = train_model(
         selected_model, X_train, y_train, X_test, scaler, train, test
     )
 
@@ -154,7 +153,7 @@ if uploaded_file is not None:
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.subheader(f"📈 Forecast vs Actual using {selected_model}")
+        st.subheader(f"📈 Forecast vs Actual using {model_used}")
         plot_df = pd.DataFrame({
             'Datetime': dates[100 - len(test):100],
             'Actual': test,
@@ -176,25 +175,21 @@ if uploaded_file is not None:
         st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
         st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
         st.markdown(f"<h5><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</h5>", unsafe_allow_html=True)
-        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
 
-    if st.button("Optimize"):
-        best_model = None
-        best_gain = -np.inf
-        for model_name in ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"]:
-            try:
-                forecast_opt, test_opt, gain_opt, _ = train_model(
-                    model_name, X_train, y_train, X_test, scaler, train, test
-                )
-                if gain_opt > best_gain:
-                    best_gain = gain_opt
+        st.markdown("---")
+        st.markdown("### ")
+        if st.button("🚀 Optimize", key="optimize_button"):
+            best_model = None
+            best_gain = -np.inf
+            best_forecast = None
+            best_test = None
+            for model_name in ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"]:
+                fcast, tst, gain, _, _ = train_model(model_name, X_train, y_train, X_test, scaler, train, test)
+                if gain > best_gain:
+                    best_gain = gain
                     best_model = model_name
-            except Exception as e:
-                continue
-        if best_model:
+                    best_forecast = fcast
+                    best_test = tst
             st.success(f"✅ Optimized Model: {best_model}")
-            st.markdown(f"<h5><strong>Optimized Daily Financial Gain:</strong> ₹{best_gain:,.2f}</h5>", unsafe_allow_html=True)
-        else:
-            st.error("❌ Optimization failed. Please check your data or model configurations.")
-else:
-    st.info("Please upload a power demand Excel file to begin.")
+            st.markdown(f"**💰 Optimized Daily Financial Gain:** ₹{best_gain:,.2f}")
+        st.caption("🧠 Optimize your model for power demand as per the highest financial savings")
