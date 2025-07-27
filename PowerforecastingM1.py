@@ -29,12 +29,10 @@ if uploaded_file is not None:
         'Kerala': 5.4, 'Punjab': 5.0, 'Bihar': 4.6
     }
 
-    model_list = [
-        "SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"
-    ]
-
     st.sidebar.header("⚙️ Model Configuration")
-    model_selector = st.sidebar.selectbox("Choose Forecasting Model", model_list, key="model_selector")
+    selected_model = st.sidebar.selectbox("Choose Forecasting Model", [
+        "SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"
+    ])
     st.sidebar.subheader("📊 Accuracy Metrics")
 
     state = st.selectbox("📍 Select State", df['State'].unique())
@@ -137,7 +135,7 @@ if uploaded_file is not None:
     X_test, y_test = create_features(scaled_series[70-window:100], window)
 
     forecast, test, financial_gain, yearly_gain = train_model(
-        model_selector, X_train, y_train, X_test, scaler, train, test
+        selected_model, X_train, y_train, X_test, scaler, train, test
     )
 
     rmse = np.sqrt(mean_squared_error(test, forecast))
@@ -149,19 +147,28 @@ if uploaded_file is not None:
     st.sidebar.write(f"**RMSE**: {rmse:.2f}")
     st.sidebar.write(f"**MAE**: {mae:.2f}")
 
-    st.sidebar.subheader("📌 Statistical Insights")
+    st.sidebar.subheader("💡 Model Insights")
     if r2_raw > 0.85 and rmse < 100 and mae < 100:
-        st.sidebar.markdown("✔️ High accuracy and low error")
-        st.sidebar.markdown("✔️ Suitable for short-term forecasting")
-        st.sidebar.markdown("✔️ Reliable for operational planning")
+        st.sidebar.success("✅ Recommended Model")
+        st.sidebar.markdown("""
+        - High accuracy and low error.
+        - Suitable for short-term forecasting.
+        - Reliable for operational planning.
+        """)
     elif r2_raw > 0.7:
-        st.sidebar.markdown("⚠️ Acceptable performance")
-        st.sidebar.markdown("⚠️ May benefit from tuning or more data")
-        st.sidebar.markdown("⚠️ Consider ensemble or hybrid approaches")
+        st.sidebar.warning("⚠️ Moderate Accuracy")
+        st.sidebar.markdown("""
+        - Acceptable performance.
+        - May benefit from tuning or more data.
+        - Consider ensemble or hybrid approaches.
+        """)
     else:
-        st.sidebar.markdown("❌ High error and low correlation")
-        st.sidebar.markdown("❌ May not capture demand patterns well")
-        st.sidebar.markdown("❌ Consider alternative models or preprocessing")
+        st.sidebar.error("❌ Low Accuracy")
+        st.sidebar.markdown("""
+        - High error and low correlation.
+        - May not capture demand patterns well.
+        - Consider alternative models or preprocessing.
+        """)
 
     baseline = np.full_like(test, np.mean(train))
     mw_savings = np.sum(baseline - forecast)
@@ -169,7 +176,7 @@ if uploaded_file is not None:
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.subheader(f"📈 Forecast vs Actual using {model_selector}")
+        st.subheader(f"📈 Forecast vs Actual using {selected_model}")
         plot_df = pd.DataFrame({
             'Datetime': dates[100 - len(test):100],
             'Actual': test,
@@ -191,23 +198,6 @@ if uploaded_file is not None:
         st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
         st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
         st.markdown(f"<h5><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</h5>", unsafe_allow_html=True)
-
-        if st.button("🚀 Optimize", key="optimize_button"):
-            best_model = None
-            best_gain = -np.inf
-            for model_name in model_list:
-                try:
-                    fcast, tst, gain, _ = train_model(model_name, X_train, y_train, X_test, scaler, train, test)
-                    if gain > best_gain:
-                        best_gain = gain
-                        best_model = model_name
-                except:
-                    continue
-            if best_model:
-                st.session_state.model_selector = best_model
-                st.success(f"✅ Optimized Model: {best_model}")
-                st.markdown(f"💰 Highest Daily Financial Gain: ₹{best_gain:,.2f}")
-            else:
-                st.error("Optimization failed. Please check your data.")
-
-        st.caption("💡 Optimize your model for power demand as per the highest financial savings")
+        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
+else:
+    st.info("Please upload a power demand Excel file to begin.")
