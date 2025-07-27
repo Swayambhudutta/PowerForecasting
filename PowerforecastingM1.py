@@ -195,4 +195,5 @@ if uploaded_file is not None:
 
     with col2:
         st.subheader("💰 Financial Highlights")
-        st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True
+        st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
+        st.markdown(f"<
