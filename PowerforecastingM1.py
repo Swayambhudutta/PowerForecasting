@@ -16,8 +16,8 @@ import torch.nn as nn
 st.set_page_config(layout="wide")
 st.title("🔮 Power Demand Forecasting & Financial Insights")
 
-# Load data
-df = pd.read_excel("sample_power_demand_data.xlsx", engine='openpyxl')
+# Load the correct Excel file
+df = pd.read_excel("synthetic_power_demand_10_states.xlsx", engine='openpyxl')
 df['Datetime'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str))
 df.sort_values(by=['State', 'Datetime'], inplace=True)
 
@@ -66,9 +66,6 @@ def create_features(data, window=5):
         X.append(data[i-window:i])
         y.append(data[i])
     return np.array(X), np.array(y)
-
-def create_dl_features(data, window=5):
-    return create_features(data, window)
 
 # Scaling
 scaler = MinMaxScaler()
@@ -158,23 +155,4 @@ col1, col2 = st.columns([3, 1])
 
 with col1:
     st.subheader(f"📈 Forecast vs Actual using {model_type}")
-    plot_df = pd.DataFrame({
-        'Datetime': dates[100 - len(test):100],
-        'Actual': test,
-        'Baseline': baseline,
-        'Predicted': forecast
-    })
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
-    sns.lineplot(data=plot_df, x='Datetime', y='Baseline', label='Baseline', ax=ax)
-    sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
-    plt.ylabel("Power Demand (MW)")
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
-
-with col2:
-    st.subheader("💰 Financial Benefits")
-    st.metric(label="MW Savings", value=f"{mw_savings:.2f} MW")
-    st.metric(label="Estimated Financial Gain", value=f"₹{financial_gain:,.2f}")
-    st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
+    plot_df = pd.DataFrame
