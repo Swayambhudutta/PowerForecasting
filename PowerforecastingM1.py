@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -147,29 +148,6 @@ if uploaded_file is not None:
     st.sidebar.write(f"**RMSE**: {rmse:.2f}")
     st.sidebar.write(f"**MAE**: {mae:.2f}")
 
-    st.sidebar.subheader("💡 Model Insights")
-    if r2_raw > 0.85 and rmse < 100 and mae < 100:
-        st.sidebar.success("✅ Recommended Model")
-        st.sidebar.markdown("""
-        - High accuracy and low error.
-        - Suitable for short-term forecasting.
-        - Reliable for operational planning.
-        """)
-    elif r2_raw > 0.7:
-        st.sidebar.warning("⚠️ Moderate Accuracy")
-        st.sidebar.markdown("""
-        - Acceptable performance.
-        - May benefit from tuning or more data.
-        - Consider ensemble or hybrid approaches.
-        """)
-    else:
-        st.sidebar.error("❌ Low Accuracy")
-        st.sidebar.markdown("""
-        - High error and low correlation.
-        - May not capture demand patterns well.
-        - Consider alternative models or preprocessing.
-        """)
-
     baseline = np.full_like(test, np.mean(train))
     mw_savings = np.sum(baseline - forecast)
 
@@ -199,5 +177,24 @@ if uploaded_file is not None:
         st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
         st.markdown(f"<h5><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</h5>", unsafe_allow_html=True)
         st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
+
+    if st.button("Optimize"):
+        best_model = None
+        best_gain = -np.inf
+        for model_name in ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"]:
+            try:
+                forecast_opt, test_opt, gain_opt, _ = train_model(
+                    model_name, X_train, y_train, X_test, scaler, train, test
+                )
+                if gain_opt > best_gain:
+                    best_gain = gain_opt
+                    best_model = model_name
+            except Exception as e:
+                continue
+        if best_model:
+            st.success(f"✅ Optimized Model: {best_model}")
+            st.markdown(f"<h5><strong>Optimized Daily Financial Gain:</strong> ₹{best_gain:,.2f}</h5>", unsafe_allow_html=True)
+        else:
+            st.error("❌ Optimization failed. Please check your data or model configurations.")
 else:
     st.info("Please upload a power demand Excel file to begin.")
