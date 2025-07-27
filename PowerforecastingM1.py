@@ -196,4 +196,8 @@ if uploaded_file is not None:
     with col2:
         st.subheader("💰 Financial Highlights")
         st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{
+        st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</h5>", unsafe_allow_html=True)
+        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
+else:
+    st.info("Please upload a power demand Excel file to begin.")
