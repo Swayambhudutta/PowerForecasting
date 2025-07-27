@@ -25,7 +25,7 @@ if uploaded_file is not None:
     df.sort_values(by=['State', 'Datetime'], inplace=True)
 
     # Model mapping and MW rates
-    model_mapping = {
+    default_model_mapping = {
         'Maharashtra': 'GRU',
         'Tamil Nadu': 'LSTM',
         'Karnataka': 'Hybrid',
@@ -51,9 +51,15 @@ if uploaded_file is not None:
         'Bihar': 4.6
     }
 
-    # Sidebar
-    state = st.sidebar.selectbox("📍 Select State", df['State'].unique())
-    model_type = model_mapping.get(state, "RandomForest")
+    # Sidebar: Model selection
+    st.sidebar.header("⚙️ Model Configuration")
+    selected_model = st.sidebar.selectbox("Choose Forecasting Model", ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"])
+
+    # Sidebar: Metrics and Insights
+    st.sidebar.subheader("📊 Accuracy Metrics")
+
+    # Main Panel: State selection
+    state = st.selectbox("📍 Select State", df['State'].unique())
     rate = mw_rates.get(state, 5.0)
 
     # Data preparation
@@ -62,7 +68,6 @@ if uploaded_file is not None:
     dates = state_df['Datetime'].values[:100]
     train, test = series[:70], series[70:]
 
-    # Feature creation
     def create_features(data, window=5):
         X, y = [], []
         for i in range(window, len(data)):
@@ -70,30 +75,31 @@ if uploaded_file is not None:
             y.append(data[i])
         return np.array(X), np.array(y)
 
-    # Scaling
     scaler = MinMaxScaler()
     scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
     window = 5
     X_train, y_train = create_features(scaled_series[:70], window)
     X_test, y_test = create_features(scaled_series[70-window:100], window)
 
-    # Model training
-    if model_type in ["RandomForest", "LinearRegression", "SVR", "XGBoost"]:
-        if model_type == "RandomForest":
+    if selected_model == "SARIMAX":
+        model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+        model_fit = model.fit(disp=False)
+        forecast = model_fit.forecast(steps=30)
+    elif selected_model in ["RandomForest", "LinearRegression", "SVR", "XGBoost"]:
+        if selected_model == "RandomForest":
             model = RandomForestRegressor(n_estimators=100, random_state=42)
-        elif model_type == "LinearRegression":
+        elif selected_model == "LinearRegression":
             model = LinearRegression()
-        elif model_type == "SVR":
+        elif selected_model == "SVR":
             model = SVR(kernel='rbf')
-        elif model_type == "XGBoost":
+        elif selected_model == "XGBoost":
             model = XGBRegressor(n_estimators=100, random_state=42)
 
         model.fit(X_train, y_train)
         forecast_scaled = model.predict(X_test)
         forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
         test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
-
-    elif model_type in ["LSTM", "GRU", "Hybrid"]:
+    elif selected_model in ["LSTM", "GRU", "Hybrid"]:
         X_train_torch = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1)
         y_train_torch = torch.tensor(y_train, dtype=torch.float32).unsqueeze(-1)
         X_test_torch = torch.tensor(X_test, dtype=torch.float32).unsqueeze(-1)
@@ -127,7 +133,7 @@ if uploaded_file is not None:
                     out = self.fc(out)
                 return out
 
-        model = TimeSeriesModel(model_type)
+        model = TimeSeriesModel(selected_model)
         criterion = nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
@@ -146,18 +152,53 @@ if uploaded_file is not None:
         forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
         test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
+    # Metrics
+    rmse = np.sqrt(mean_squared_error(test, forecast))
+    mae = mean_absolute_error(test, forecast)
+    r2_raw = r2_score(test, forecast)
+    r2 = max(0.0, r2_raw)
+
+    st.sidebar.write(f"**R² Score**: {r2:.2f}")
+    st.sidebar.write(f"**RMSE**: {rmse:.2f}")
+    st.sidebar.write(f"**MAE**: {mae:.2f}")
+
+    # Insights
+    st.sidebar.subheader("💡 Model Insights")
+    if r2_raw > 0.85 and rmse < 100 and mae < 100:
+        st.sidebar.success("✅ Recommended Model")
+        st.sidebar.markdown("""
+        - High accuracy and low error.
+        - Suitable for short-term forecasting.
+        - Reliable for operational planning.
+        """)
+    elif r2_raw > 0.7:
+        st.sidebar.warning("⚠️ Moderate Accuracy")
+        st.sidebar.markdown("""
+        - Acceptable performance.
+        - May benefit from tuning or more data.
+        - Consider ensemble or hybrid approaches.
+        """)
+    else:
+        st.sidebar.error("❌ Low Accuracy")
+        st.sidebar.markdown("""
+        - High error and low correlation.
+        - May not capture demand patterns well.
+        - Consider alternative models or preprocessing.
+        """)
+
     # Baseline prediction
     baseline = np.full_like(test, np.mean(train))
 
     # Savings calculation
     mw_savings = np.sum(baseline - forecast)
     financial_gain = mw_savings * rate
+    yearly_gain = financial_gain * 365  # assuming daily savings
 
     # Layout
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.subheader(f"📈 Forecast vs Actual using {model_type}")
+        st.subheader(f"📈 Forecast vs Actual using {selected_model}")
         plot_df = pd.DataFrame({
             'Datetime': dates[100 - len(test):100],
             'Actual': test,
@@ -168,16 +209,3 @@ if uploaded_file is not None:
         fig, ax = plt.subplots(figsize=(12, 6))
         sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
         sns.lineplot(data=plot_df, x='Datetime', y='Baseline', label='Baseline', ax=ax)
-        sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
-        plt.ylabel("Power Demand (MW)")
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-
-    with col2:
-        st.subheader("💰 Financial Benefits")
-        st.metric(label="MW Savings", value=f"{mw_savings:.2f} MW")
-        st.metric(label="Estimated Financial Gain", value=f"₹{financial_gain:,.2f}")
-        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
-
-else:
-    st.info("Please upload the Excel file to proceed.")
