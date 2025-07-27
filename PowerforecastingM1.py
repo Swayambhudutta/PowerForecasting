@@ -24,45 +24,22 @@ if uploaded_file is not None:
     df['Datetime'] = pd.to_datetime(df['Date'].astype(str) + ' ' + df['Time'].astype(str))
     df.sort_values(by=['State', 'Datetime'], inplace=True)
 
-    # Model mapping and MW rates
-    default_model_mapping = {
-        'Maharashtra': 'GRU',
-        'Tamil Nadu': 'LSTM',
-        'Karnataka': 'Hybrid',
-        'Gujarat': 'LSTM',
-        'West Bengal': 'GRU',
-        'Rajasthan': 'Hybrid',
-        'Uttar Pradesh': 'GRU',
-        'Kerala': 'Hybrid',
-        'Punjab': 'LSTM',
-        'Bihar': 'Hybrid'
-    }
-
     mw_rates = {
-        'Maharashtra': 5.2,
-        'Tamil Nadu': 4.8,
-        'Karnataka': 5.0,
-        'Gujarat': 5.1,
-        'West Bengal': 4.9,
-        'Rajasthan': 5.3,
-        'Uttar Pradesh': 4.7,
-        'Kerala': 5.4,
-        'Punjab': 5.0,
-        'Bihar': 4.6
+        'Maharashtra': 5.2, 'Tamil Nadu': 4.8, 'Karnataka': 5.0, 'Gujarat': 5.1,
+        'West Bengal': 4.9, 'Rajasthan': 5.3, 'Uttar Pradesh': 4.7,
+        'Kerala': 5.4, 'Punjab': 5.0, 'Bihar': 4.6
     }
 
-    # Sidebar: Model selection
     st.sidebar.header("⚙️ Model Configuration")
-    selected_model = st.sidebar.selectbox("Choose Forecasting Model", ["SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"])
+    selected_model = st.sidebar.selectbox("Choose Forecasting Model", [
+        "SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"
+    ])
 
-    # Sidebar: Metrics and Insights
     st.sidebar.subheader("📊 Accuracy Metrics")
 
-    # Main Panel: State selection
     state = st.selectbox("📍 Select State", df['State'].unique())
     rate = mw_rates.get(state, 5.0)
 
-    # Data preparation
     state_df = df[df['State'] == state].sort_values('Datetime')
     series = state_df['Power Demand (MW)'].values[:100]
     dates = state_df['Datetime'].values[:100]
@@ -162,7 +139,6 @@ if uploaded_file is not None:
     st.sidebar.write(f"**RMSE**: {rmse:.2f}")
     st.sidebar.write(f"**MAE**: {mae:.2f}")
 
-    # Insights
     st.sidebar.subheader("💡 Model Insights")
     if r2_raw > 0.85 and rmse < 100 and mae < 100:
         st.sidebar.success("✅ Recommended Model")
@@ -192,7 +168,7 @@ if uploaded_file is not None:
     # Savings calculation
     mw_savings = np.sum(baseline - forecast)
     financial_gain = mw_savings * rate
-    yearly_gain = financial_gain * 365  # assuming daily savings
+    yearly_gain = financial_gain * 365
 
     # Layout
     col1, col2 = st.columns([3, 1])
@@ -209,3 +185,17 @@ if uploaded_file is not None:
         fig, ax = plt.subplots(figsize=(12, 6))
         sns.lineplot(data=plot_df, x='Datetime', y='Actual', label='Actual', ax=ax)
         sns.lineplot(data=plot_df, x='Datetime', y='Baseline', label='Baseline', ax=ax)
+        sns.lineplot(data=plot_df, x='Datetime', y='Predicted', label='Predicted', ax=ax)
+        ax.set_ylabel("Power Demand (MW)")
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("💰 Financial Highlights")
+        st.markdown(f"<small><strong>MW Savings:</strong> {mw_savings:.2f} MW</small>", unsafe_allow_html=True)
+        st.markdown(f"<small><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</small>", unsafe_allow_html=True)
+        st.markdown(f"<small><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</small>", unsafe_allow_html=True)
+        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
+
+else:
+    st.info("Please upload a power demand Excel file to begin.")
