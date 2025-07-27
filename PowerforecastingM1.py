@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 st.set_page_config(layout="wide")
-st.title("🔮 Power Demand Forecasting & Financial Insights")
+st.title("🔮 Short-Term Intra-Day Forecast of Power Demand")
 
 # Upload Excel file
 uploaded_file = st.file_uploader("📤 Upload Power Demand Excel File", type=["xlsx"])
@@ -52,84 +52,94 @@ if uploaded_file is not None:
             y.append(data[i])
         return np.array(X), np.array(y)
 
+    def train_model(model_name, X_train, y_train, X_test, scaler, train, test):
+        if model_name == "SARIMAX":
+            model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+            model_fit = model.fit(disp=False)
+            forecast = model_fit.forecast(steps=30)
+        elif model_name in ["RandomForest", "LinearRegression", "SVR", "XGBoost"]:
+            if model_name == "RandomForest":
+                model = RandomForestRegressor(n_estimators=100, random_state=42)
+            elif model_name == "LinearRegression":
+                model = LinearRegression()
+            elif model_name == "SVR":
+                model = SVR(kernel='rbf')
+            elif model_name == "XGBoost":
+                model = XGBRegressor(n_estimators=100, random_state=42)
+
+            model.fit(X_train, y_train)
+            forecast_scaled = model.predict(X_test)
+            forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
+            test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+        elif model_name in ["LSTM", "GRU", "Hybrid"]:
+            X_train_torch = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1)
+            y_train_torch = torch.tensor(y_train, dtype=torch.float32).unsqueeze(-1)
+            X_test_torch = torch.tensor(X_test, dtype=torch.float32).unsqueeze(-1)
+
+            class TimeSeriesModel(nn.Module):
+                def __init__(self, model_type):
+                    super().__init__()
+                    if model_type == "LSTM":
+                        self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
+                    elif model_type == "GRU":
+                        self.rnn = nn.GRU(input_size=1, hidden_size=50, batch_first=True)
+                    elif model_type == "Hybrid":
+                        self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
+                        self.fc1 = nn.Linear(50, 25)
+                        self.fc2 = nn.Linear(25, 1)
+                    else:
+                        raise ValueError("Invalid model type")
+
+                    if model_type != "Hybrid":
+                        self.fc = nn.Linear(50, 1)
+
+                    self.model_type = model_type
+
+                def forward(self, x):
+                    out, _ = self.rnn(x)
+                    out = out[:, -1, :]
+                    if self.model_type == "Hybrid":
+                        out = torch.relu(self.fc1(out))
+                        out = self.fc2(out)
+                    else:
+                        out = self.fc(out)
+                    return out
+
+            model = TimeSeriesModel(model_name)
+            criterion = nn.MSELoss()
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+            for epoch in range(50):
+                model.train()
+                optimizer.zero_grad()
+                output = model(X_train_torch)
+                loss = criterion(output, y_train_torch)
+                loss.backward()
+                optimizer.step()
+
+            model.eval()
+            with torch.no_grad():
+                forecast_scaled = model(X_test_torch).squeeze().numpy()
+
+            forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
+            test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+
+        baseline = np.full_like(test, np.mean(train))
+        mw_savings = np.sum(baseline - forecast)
+        financial_gain = mw_savings * rate
+        yearly_gain = financial_gain * 365
+        return forecast, test, financial_gain, yearly_gain
+
     scaler = MinMaxScaler()
     scaled_series = scaler.fit_transform(series.reshape(-1, 1)).flatten()
     window = 5
     X_train, y_train = create_features(scaled_series[:70], window)
     X_test, y_test = create_features(scaled_series[70-window:100], window)
 
-    if selected_model == "SARIMAX":
-        model = SARIMAX(train, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
-        model_fit = model.fit(disp=False)
-        forecast = model_fit.forecast(steps=30)
-    elif selected_model in ["RandomForest", "LinearRegression", "SVR", "XGBoost"]:
-        if selected_model == "RandomForest":
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
-        elif selected_model == "LinearRegression":
-            model = LinearRegression()
-        elif selected_model == "SVR":
-            model = SVR(kernel='rbf')
-        elif selected_model == "XGBoost":
-            model = XGBRegressor(n_estimators=100, random_state=42)
+    forecast, test, financial_gain, yearly_gain = train_model(
+        selected_model, X_train, y_train, X_test, scaler, train, test
+    )
 
-        model.fit(X_train, y_train)
-        forecast_scaled = model.predict(X_test)
-        forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
-        test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
-    elif selected_model in ["LSTM", "GRU", "Hybrid"]:
-        X_train_torch = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1)
-        y_train_torch = torch.tensor(y_train, dtype=torch.float32).unsqueeze(-1)
-        X_test_torch = torch.tensor(X_test, dtype=torch.float32).unsqueeze(-1)
-
-        class TimeSeriesModel(nn.Module):
-            def __init__(self, model_type):
-                super().__init__()
-                if model_type == "LSTM":
-                    self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
-                elif model_type == "GRU":
-                    self.rnn = nn.GRU(input_size=1, hidden_size=50, batch_first=True)
-                elif model_type == "Hybrid":
-                    self.rnn = nn.LSTM(input_size=1, hidden_size=50, batch_first=True)
-                    self.fc1 = nn.Linear(50, 25)
-                    self.fc2 = nn.Linear(25, 1)
-                else:
-                    raise ValueError("Invalid model type")
-
-                if model_type != "Hybrid":
-                    self.fc = nn.Linear(50, 1)
-
-                self.model_type = model_type
-
-            def forward(self, x):
-                out, _ = self.rnn(x)
-                out = out[:, -1, :]
-                if self.model_type == "Hybrid":
-                    out = torch.relu(self.fc1(out))
-                    out = self.fc2(out)
-                else:
-                    out = self.fc(out)
-                return out
-
-        model = TimeSeriesModel(selected_model)
-        criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-        for epoch in range(50):
-            model.train()
-            optimizer.zero_grad()
-            output = model(X_train_torch)
-            loss = criterion(output, y_train_torch)
-            loss.backward()
-            optimizer.step()
-
-        model.eval()
-        with torch.no_grad():
-            forecast_scaled = model(X_test_torch).squeeze().numpy()
-
-        forecast = scaler.inverse_transform(forecast_scaled.reshape(-1, 1)).flatten()
-        test = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
-
-    # Metrics
     rmse = np.sqrt(mean_squared_error(test, forecast))
     mae = mean_absolute_error(test, forecast)
     r2_raw = r2_score(test, forecast)
@@ -162,15 +172,9 @@ if uploaded_file is not None:
         - Consider alternative models or preprocessing.
         """)
 
-    # Baseline prediction
     baseline = np.full_like(test, np.mean(train))
-
-    # Savings calculation
     mw_savings = np.sum(baseline - forecast)
-    financial_gain = mw_savings * rate
-    yearly_gain = financial_gain * 365
 
-    # Layout
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -189,13 +193,10 @@ if uploaded_file is not None:
         ax.set_ylabel("Power Demand (MW)")
         plt.xticks(rotation=45)
         st.pyplot(fig)
+        st.caption("📌 Disclaimer: Model trained on 70 blocks of 15-minute data and predicted for the last 30 blocks.")
 
     with col2:
         st.subheader("💰 Financial Highlights")
-        st.markdown(f"<small><strong>MW Savings:</strong> {mw_savings:.2f} MW</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small><strong>Estimated Yearly Gain:</strong> ₹{yearly_gain:,.2f}</small>", unsafe_allow_html=True)
-        st.caption(f"💡 Rate per MW in {state}: ₹{rate:.2f}")
-
-else:
-    st.info("Please upload a power demand Excel file to begin.")
+        st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h
