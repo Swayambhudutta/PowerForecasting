@@ -16,7 +16,6 @@ import torch.nn as nn
 st.set_page_config(layout="wide")
 st.title("🔮 Short-Term Intra-Day Forecast of Power Demand")
 
-# Upload Excel file
 uploaded_file = st.file_uploader("📤 Upload Power Demand Excel File", type=["xlsx"])
 
 if uploaded_file is not None:
@@ -34,7 +33,6 @@ if uploaded_file is not None:
     selected_model = st.sidebar.selectbox("Choose Forecasting Model", [
         "SARIMAX", "RandomForest", "LinearRegression", "SVR", "XGBoost", "LSTM", "GRU", "Hybrid"
     ])
-
     st.sidebar.subheader("📊 Accuracy Metrics")
 
     state = st.selectbox("📍 Select State", df['State'].unique())
@@ -197,6 +195,4 @@ if uploaded_file is not None:
 
     with col2:
         st.subheader("💰 Financial Highlights")
-        st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h5><strong>Daily Financial Gain:</strong> ₹{financial_gain:,.2f}</h5>", unsafe_allow_html=True)
-        st.markdown(f"<h
+        st.markdown(f"<h5><strong>MW Savings:</strong> {mw_savings:.2f} MW</h5>", unsafe_allow_html=True
